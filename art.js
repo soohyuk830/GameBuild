@@ -288,8 +288,20 @@ function drawPlayer(ctx, p, time, ticks, sprite, masteryShieldTicks) {
     ring(ctx, p.x, p.y - 7, radius, "#ffe4aaab", 1.9);
     ring(ctx, p.x, p.y - 7, radius + 4, "#ffe7ba57", 1.1);
     if (masteryShieldTicks > 0) {
-      ring(ctx, p.x, p.y - 7, radius + 4, "#fff2c7", 2.5, -Math.PI / 2,
-        -Math.PI / 2 + masteryShieldTicks / (MASTERIES.shield.duration * TICKS_PER_SECOND) * TAU);
+      const fraction = masteryShieldTicks / (MASTERIES.shield.duration * TICKS_PER_SECOND);
+      const y = p.y - 7;
+      ring(ctx, p.x, y, radius + 5, "#fff2c7", 2.5, -Math.PI / 2, -Math.PI / 2 + fraction * TAU);
+      for (let i = 0; i < 8; i++) {
+        const angle = i * TAU / 8 + time * .26;
+        ring(ctx, p.x, y, radius - 4, "#ffbf6da9", 2.4, angle, angle + .39);
+        if (fraction > .39 || i > (1 - fraction) * 8) continue;
+        const cx = Math.cos(angle), cy = Math.sin(angle);
+        const points = [0, 7, 13, 21].map((length, index) => {
+          const offset = index % 2 ? 4 : -3;
+          return [p.x + cx * (radius - length) - cy * offset, y + cy * (radius - length) + cx * offset];
+        });
+        line(ctx, points, "#ffdba5", 1.5);
+      }
     }
   }
   ctx.save();
@@ -620,14 +632,78 @@ function drawBlade(ctx, blade) {
   ctx.restore();
 }
 
+function drawMasteryOrbit(ctx, run) {
+  const { player: p, bladeRadius } = run;
+  ring(ctx, p.x, p.y, bladeRadius + 8, "#d181ff41", 1.4);
+  for (const blade of run.blades) {
+    ring(ctx, p.x, p.y, bladeRadius, "#ae60fa78", 11, blade.angle - .92, blade.angle);
+    ring(ctx, p.x, p.y, bladeRadius, "#f2b4ffcd", 2.4, blade.angle - .59, blade.angle);
+    ring(ctx, p.x, p.y, bladeRadius + 8, "#f5ddffc7", 1.4, blade.angle - .33, blade.angle + .03);
+  }
+}
+
+function drawMasteryHealing(ctx, p, time, vitality) {
+  const color = vitality ? "#ffd297" : "#a0ffcf";
+  const tint = vitality ? "#ff72915d" : "#53ffc064";
+  const radius = vitality ? 48 : 36;
+  const y = p.y + 10;
+  glow(ctx, p.x, y, radius * 1.5, tint);
+  for (let i = 0; i < 3; i++) {
+    const angle = time * (vitality ? -2 : 2.7) + i * TAU / 3;
+    ring(ctx, p.x, y, radius, color, 2.2, angle, angle + .82);
+  }
+  for (let i = 0; i < 10; i++) {
+    const phase = (time * .95 + i * .173) % 1;
+    const angle = i * 2.39996 + time * 1.7;
+    const x = p.x + Math.cos(angle) * radius * (1 - phase * .6);
+    const height = y + Math.sin(angle) * radius * .57 - phase * 57;
+    ctx.save();
+    ctx.globalAlpha = Math.sin(phase * Math.PI);
+    if (vitality) {
+      oval(ctx, x, height, 2.3, 3.4, color);
+    } else {
+      line(ctx, [[x - 3,height],[x + 3,height]], color, 1.7);
+      line(ctx, [[x,height - 3],[x,height + 3]], color, 1.7);
+    }
+    ctx.restore();
+  }
+}
+
+const MOON_COLORS = ["#88c4ff", "#c4a5ff", "#87f8eb"];
+
+function drawMoonBolt(ctx, bolt) {
+  const { lane, trail } = bolt.moon;
+  const color = MOON_COLORS[lane];
+  if (trail.length) {
+    const fade = ctx.createLinearGradient(trail[0].x, trail[0].y, bolt.x, bolt.y);
+    fade.addColorStop(0, `${color}00`);
+    fade.addColorStop(.5, `${color}65`);
+    fade.addColorStop(1, color);
+    const points = trail.map(({ x, y }) => [x, y]);
+    points.push([bolt.x, bolt.y]);
+    line(ctx, points, fade, 5.4);
+    line(ctx, points, "#e4f8ff80", 1.25);
+  }
+  ctx.save();
+  ctx.translate(bolt.x, bolt.y);
+  ctx.rotate(Math.atan2(bolt.vy, bolt.vx));
+  glow(ctx, 0, 0, 13, `${color}b8`);
+  polygon(ctx, [[-7,0],[-2,-2.9],[6,0],[-2,2.9]], "#f3ffff", color, 1.2);
+  ctx.restore();
+}
+
 function drawBolt(ctx, b) {
+  if (b.moon) {
+    drawMoonBolt(ctx, b);
+    return;
+  }
   ctx.save();
   ctx.translate(b.x, b.y);
   ctx.rotate(Math.atan2(b.vy, b.vx));
   const tail = ctx.createLinearGradient(-44, 0, 9, 0);
   tail.addColorStop(0, "transparent");
-  tail.addColorStop(.65, b.target ? "#76b5ffb0" : b.breach ? "#efb9ffab" : b.auto ? "#5ebdff9c" : "#ff9c459c");
-  tail.addColorStop(1, b.target ? "#e5f8ff" : b.breach ? "#fff0b1" : b.auto ? "#b2f0ff" : "#ffd892");
+  tail.addColorStop(.65, b.breach ? "#efb9ffab" : b.auto ? "#5ebdff9c" : "#ff9c459c");
+  tail.addColorStop(1, b.breach ? "#fff0b1" : b.auto ? "#b2f0ff" : "#ffd892");
   const width = b.breach ? 8 : 5;
   polygon(ctx, [[-44,0],[-8,-width],[9,0],[-8,width]], tail);
   line(ctx, [[-19,0],[5,0]], b.auto ? "#dffbff" : "#fff0cd", 1.6);
@@ -682,15 +758,58 @@ function drawEffect(ctx, effect, tick) {
   if (kind === "dash") {
     glow(ctx, x, y - 7, (effect.empowered ? 39 : 27) + age * 7, "#c98affcf");
     oval(ctx, x, y - 7, 16, 11, effect.empowered ? "#f3ddffd0" : "#dcc1ff8f");
+  } else if (kind === "dash-trail") {
+    const dx = effect.endX - x, dy = effect.endY - y;
+    const length = Math.hypot(dx, dy);
+    if (length > 1) {
+      ctx.translate(x, y - 8);
+      ctx.rotate(Math.atan2(dy, dx));
+      const width = (1 - age) * 18;
+      const color = ctx.createLinearGradient(0, 0, length, 0);
+      color.addColorStop(0, "#8a43e22b");
+      color.addColorStop(.52, "#bf6fff8d");
+      color.addColorStop(1, "#f9cbffdf");
+      polygon(ctx, [[0,0],[length * .38,-width],[length,0],[length * .58,width]], color);
+      line(ctx, [[0,0],[length,0]], color, 5);
+      line(ctx, [[length * .34,-width * .43],[length,-2]], "#f2b2ffc9", 1.65);
+      line(ctx, [[length * .14,width * .36],[length,2]], "#e3a4ff99", 1.5);
+    }
+  } else if (kind === "mastery-cast") {
+    const radius = 20 + age * 65;
+    glow(ctx, x, y, radius, `${effect.color}72`);
+    for (let i = 0; i < 6; i++) {
+      const angle = i * TAU / 6 + age * 1.2;
+      ring(ctx, x, y, radius, effect.color, 2.1, angle, angle + .54);
+    }
+  } else if (kind === "moon-muzzle" || kind === "mastery-impact") {
+    const muzzle = kind === "moon-muzzle";
+    const color = muzzle ? MOON_COLORS[effect.lane] : effect.color;
+    const size = muzzle ? 9 : 15;
+    ctx.translate(x, y);
+    ctx.rotate(effect.angle);
+    glow(ctx, 0, 0, size * 1.7, `${color}99`);
+    line(ctx, [[-size * .48,0],[size * (1 + age),0]], color, 2.6);
+    for (const side of [-1, 1]) {
+      line(ctx, [[0,side * 2],[size * (.5 + age),side * size * (.35 + age)]], color, 1.55);
+    }
   } else if (kind === "shield-wave") {
     const radius = effect.radius * (tick - effect.tick + 1) / effect.life;
-    ring(ctx, x, y, radius, "#ffc77cb8", 13);
-    ring(ctx, x, y, radius, "#fff2cf", 3.2);
-    for (let i = 0; i < 16; i++) {
-      const angle = i * TAU / 16 + age * .35;
-      const px = x + Math.cos(angle) * radius;
-      const py = y + Math.sin(angle) * radius;
-      line(ctx, [[px, py], [px + Math.cos(angle + .4) * 14, py + Math.sin(angle + .4) * 14]], "#ffd291", 2);
+    if (age < .36) glow(ctx, x, y, 65 + age * 90, "#ffce849b");
+    ring(ctx, x, y, radius, "#ffad547a", 19);
+    ring(ctx, x, y, radius, "#fff2cf", 3.8);
+    ring(ctx, x, y, Math.max(1, radius - 17), "#ffd08abf", 2);
+    for (let i = 0; i < 20; i++) {
+      const angle = i * TAU / 20 + age * (i % 2 ? .41 : -.28);
+      const distance = radius * (.58 + (i % 5) * .095);
+      const px = x + Math.cos(angle) * distance;
+      const py = y + Math.sin(angle) * distance;
+      ctx.save();
+      ctx.translate(px, py);
+      ctx.rotate(angle + age * (i % 2 ? 6 : -5));
+      const size = 4 + (i % 4) * 1.7;
+      polygon(ctx, [[-size,0],[size * .7,-size * .48],[size,0],[size * .17,size * .58]],
+        i % 3 ? "#ffd695b3" : "#fff5d5", "#fff2c9a8", 1);
+      ctx.restore();
     }
   } else if (kind === "hurt") {
     ring(ctx, x, y, 19 + 32 * age, "#ff5a78", 3.5);

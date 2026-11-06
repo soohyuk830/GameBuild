@@ -443,11 +443,10 @@ function drawScene(run, wallTime) {
     const counter = tick < run.counterUntil;
     const empowered = run.masteryActive("orbit");
     ring(ctx, p.x, p.y, run.bladeRadius, empowered || counter ? "#e4b1ffe0" : "#bc81ee3d", empowered || counter ? 2.4 : 1.1);
+    if (empowered) drawMasteryOrbit(ctx, run);
   }
-  if (run.masteryActive("vitality") || run.masteryActive("regen")) {
-    glow(ctx, p.x, p.y, 48, "#75ffc06b");
-    ring(ctx, p.x, p.y + 10, 35 + Math.sin(time * 12) * 3, "#a4f7c3b9", 2.1);
-  }
+  if (run.masteryActive("vitality")) drawMasteryHealing(ctx, p, time, true);
+  if (run.masteryActive("regen")) drawMasteryHealing(ctx, p, time, false);
   for (const hazard of run.hazards) {
     if ((hazard.kind === "eruption" || hazard.kind === "blast") && visible(hazard)) drawHazard(ctx, hazard, tick);
   }
@@ -455,6 +454,9 @@ function drawScene(run, wallTime) {
     if (enemy.attack && visible(enemy, enemy.attack.beam ? BOSS_LASER_REACH + 50 : 540)) drawBossAttack(ctx, enemy, tick);
     if (enemy.skill && visible(enemy, 430)) drawFoeWarning(ctx, enemy, tick);
     if (visible(enemy)) drawEnemyStatus(ctx, enemy, tick);
+  }
+  for (const effect of run.effects) {
+    if (effect.kind === "dash-trail" && visible(effect, effect.radius)) drawEffect(ctx, effect, tick);
   }
 
   const actors = run.enemies.filter((enemy) => (enemy.opacity ?? 1) > 0 && visible(enemy));
@@ -484,7 +486,9 @@ function drawScene(run, wallTime) {
     if ("vx" in hazard && visible(hazard)) drawHazard(ctx, hazard, tick);
   }
   for (const bolt of run.bolts) if (visible(bolt)) drawBolt(ctx, bolt);
-  for (const effect of run.effects) if (visible(effect, Math.max(200, effect.radius ?? 0))) drawEffect(ctx, effect, tick);
+  for (const effect of run.effects) {
+    if (effect.kind !== "dash-trail" && visible(effect, Math.max(200, effect.radius ?? 0))) drawEffect(ctx, effect, tick);
+  }
 
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   const centerX = width / 2;

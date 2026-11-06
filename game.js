@@ -98,8 +98,8 @@ const AUGMENTS = {
 const MASTERY_RANK = 5;
 const MASTERIES = {
   auto: {
-    key: "1", name: "월광 폭우", cooldown: 30, shots: 50, range: 520, damage: 18,
-    description: "주변 적을 무작위로 골라 유도 마력탄 50발을 한꺼번에 발사합니다.",
+    key: "1", name: "월광 폭우", cooldown: 30, shots: 50, shotInterval: 2, range: 520, damage: 18,
+    description: "몸에서 세 갈래로 마력탄 50발을 빠르게 연사합니다. 탄이 곡선을 그리며 주변 적을 추적합니다.",
   },
   dash: {
     key: "2", name: "그림자 질주", cooldown: 30, duration: 4, reach: 1.8, damage: 42,
@@ -404,20 +404,17 @@ class Survival {
     const player = this.player;
     if (skill.heal && player.hp >= player.maxHp) return false;
     if (id === "auto") {
-      const targets = this.enemies.filter((enemy) => enemy.hp > 0 &&
-        (enemy.opacity ?? 1) > STEALTH_TARGET_ALPHA && distanceSquared(player, enemy) <= skill.range ** 2);
-      if (!targets.length) return false;
-      for (let i = 0; i < skill.shots; i++) {
-        const target = targets[Math.floor(this.random() * targets.length)];
-        this.launchBolt(target.x, target.y, skill.damage, true, false, target);
-      }
+      if (!this.moonTargets().length) return false;
+      this.moonHeading = Math.atan2(this.facing.y, this.facing.x);
+      this.masteryUntil.auto = this.ticks + skill.shots * skill.shotInterval;
     } else {
       this.masteryUntil[id] = this.ticks + skill.duration * TICKS_PER_SECOND;
       if (id === "dash") this.activate("dash", dx, dy);
       if (id === "orbit") this.updateBlades();
     }
     this.masteryUsedAt[id] = this.ticks;
-    this.playSound?.(skill.heal ? "heal" : "mastery");
+    this.effects.push({ kind: "mastery-cast", x: player.x, y: player.y - 8, color: AUGMENTS[id].color, tick: this.ticks, life: 26 });
+    this.playSound?.(`mastery-${id}`);
     return true;
   }
 
@@ -431,7 +428,13 @@ class Survival {
       const empowered = this.masteryActive("dash");
       this.dash = { ...direction, until: this.ticks + DASH_DURATION_TICKS, hits: empowered ? new Set() : null };
       if (this.hasCombo("breach")) this.breachUntil = this.dash.until + BREACH_SHOT_WINDOW;
-      if (empowered) return true;
+      if (empowered) {
+        const { x, y } = this.player;
+        this.dash.trail = { kind: "dash-trail", x, y, endX: x, endY: y, tick: this.ticks, life: 25, radius: 300 };
+        this.effects.push(this.dash.trail);
+        this.playSound?.("dash-sweep");
+        return true;
+      }
     } else {
       this.player.shieldUntil = this.ticks + Math.round(this.stats(id).duration * TICKS_PER_SECOND);
     }
@@ -481,7 +484,11 @@ class Survival {
     const traveledX = nextX - player.x;
     const traveledY = nextY - player.y;
     const traveled = Math.hypot(traveledX, traveledY);
-    if (dashing && this.dash.hits && traveled > 0) this.hitDashPath(traveledX, traveledY, traveled);
+    if (dashing && this.dash.trail) {
+      this.dash.trail.endX = nextX;
+      this.dash.trail.endY = nextY;
+      if (traveled > 0) this.hitDashPath(traveledX, traveledY, traveled);
+    }
     player.x = nextX;
     player.y = nextY;
     player.travelX = traveledX;
@@ -495,7 +502,7 @@ class Survival {
       this.counterUntil = this.ticks + ORBIT_COUNTER_TICKS;
     }
     const bladeSpeed = this.masteryActive("orbit") ? MASTERIES.orbit.speed : 1;
-    this.bladeAngle = (this.bladeAngle + 3.1 * bladeSpeed / TICKS_PER_SECOND) % TAU;
+    this.bladeAngle += 3.1 * bladeSpeed / TICKS_PER_SECOND;
     this.updateBlades();
     this.effects = this.effects.filter((effect) => this.ticks - effect.tick < effect.life);
 
@@ -525,11 +532,35 @@ class Survival {
       if ((x - dx * projection) ** 2 + (y - dy * projection) ** 2 > (enemy.def.radius + p.radius) ** 2) continue;
       hits.add(enemy);
       this.hit(enemy, MASTERIES.dash.damage, { vx: dx / distance, vy: dy / distance });
+      this.masteryImpact(enemy, "#edafff", Math.atan2(dy, dx));
     }
+  }
+
+  moonTargets() {
+    const { range } = MASTERIES.auto;
+    return this.enemies.filter((enemy) => enemy.hp > 0 &&
+      (enemy.opacity ?? 1) > STEALTH_TARGET_ALPHA && distanceSquared(this.player, enemy) <= range ** 2);
+  }
+
+  fireMoonShot(index) {
+    const p = this.player;
+    const { damage } = MASTERIES.auto;
+    const targets = this.moonTargets();
+    const target = targets.length ? targets[Math.floor(this.random() * targets.length)] : null;
+    const lane = index % 3;
+    const angle = this.moonHeading + lane * TAU / 3 + Math.sin(index * .12) * .23;
+    const bolt = this.launchBolt(p.x + Math.cos(angle), p.y + Math.sin(angle), damage, true, false, { lane, target });
+    this.effects.push({ kind: "moon-muzzle", x: bolt.x, y: bolt.y, angle, lane, tick: this.ticks, life: 11 });
+    if (index % 6 === 0) this.playSound?.("moon-stream");
   }
 
   advanceMasteries() {
     const p = this.player;
+    if (this.masteryActive("auto")) {
+      const age = this.ticks - this.masteryUsedAt.auto - 1;
+      const { shotInterval } = MASTERIES.auto;
+      if (age >= 0 && age % shotInterval === 0) this.fireMoonShot(age / shotInterval);
+    }
     let healing = this.stats("regen")?.perSecond ?? 0;
     for (const id of ["vitality", "regen"]) {
       const skill = MASTERIES[id];
@@ -541,7 +572,7 @@ class Survival {
     if (this.ticks === this.masteryUntil.shield) {
       this.shieldWave = { kind: "shield-wave", x: p.x, y: p.y, tick: this.ticks, life: 30, radius, hits: new Set() };
       this.effects.push(this.shieldWave);
-      this.playSound?.("blast");
+      this.playSound?.("shield-shatter");
     }
     const wave = this.shieldWave;
     if (!wave) return;
@@ -554,6 +585,7 @@ class Survival {
       if (distance - enemy.def.radius > outer || distance + enemy.def.radius < inner) continue;
       wave.hits.add(enemy);
       this.hit(enemy, damage);
+      this.masteryImpact(enemy, "#ffd18e", Math.atan2(enemy.y - wave.y, enemy.x - wave.x));
     }
     if (age + 1 === wave.life) this.shieldWave = null;
   }
@@ -669,16 +701,18 @@ class Survival {
     return true;
   }
 
-  launchBolt(x, y, damage, auto, breach = false, target = null) {
+  launchBolt(x, y, damage, auto, breach = false, moon = null) {
     const p = this.player;
-    const spread = target ? (this.random() - .5) * 1.45 : 0;
-    const direction = Math.atan2(y - p.y, x - p.x) + spread;
+    const direction = Math.atan2(y - p.y, x - p.x);
     const vx = Math.cos(direction);
     const vy = Math.sin(direction);
-    this.bolts.push({
-      x: p.x + vx * 14, y: p.y + vy * 14, vx, vy, damage, auto, breach,
-      pierces: auto ? 0 : (breach ? 2 : 1), targets: [], age: 0, spent: false, target,
-    });
+    const bolt = {
+      x: p.x + vx * (moon ? 22 : 14), y: p.y + vy * (moon ? 19 : 14) - (moon ? 9 : 0),
+      vx, vy, damage, auto, breach, pierces: auto ? 0 : (breach ? 2 : 1), targets: [], age: 0, spent: false, moon,
+    };
+    if (moon) moon.trail = [];
+    this.bolts.push(bolt);
+    return bolt;
   }
 
   autoFire() {
@@ -700,17 +734,16 @@ class Survival {
   moveBolts() {
     for (const bolt of this.bolts) {
       bolt.age++;
-      const target = bolt.target;
-      if (target && target.hp > 0 && (target.opacity ?? 1) > STEALTH_TARGET_ALPHA) {
-        const heading = Math.atan2(bolt.vy, bolt.vx);
-        const difference = Math.atan2(target.y - bolt.y, target.x - bolt.x) - heading;
-        const direction = heading + clamp(Math.atan2(Math.sin(difference), Math.cos(difference)), -.20, .20);
-        bolt.vx = Math.cos(direction);
-        bolt.vy = Math.sin(direction);
-      }
-      const speed = target ? 17 : 10;
+      if (bolt.moon) this.steerMoonBolt(bolt);
+      const speed = bolt.moon ? Math.min(17, 6 + bolt.age * .55) : 10;
       bolt.x += bolt.vx * speed;
       bolt.y += bolt.vy * speed;
+      if (bolt.moon) {
+        if (bolt.x < 2 || bolt.x > WORLD.width - 2) bolt.vx *= -1;
+        if (bolt.y < 2 || bolt.y > WORLD.height - 2) bolt.vy *= -1;
+        bolt.x = clamp(bolt.x, 2, WORLD.width - 2);
+        bolt.y = clamp(bolt.y, 2, WORLD.height - 2);
+      }
       if (shotHitsCover(bolt.x, bolt.y, 3)) {
         bolt.spent = true;
         this.effects.push({ kind: "cover", x: bolt.x, y: bolt.y, tick: this.ticks, life: 15 });
@@ -723,6 +756,7 @@ class Survival {
           distanceSquared(bolt, bossCore(enemy)) <= BOSS_CORE_RADIUS ** 2;
         if (!hitsBody && !hitsOpenCore) continue;
         this.hit(enemy, bolt.damage, bolt);
+        if (bolt.moon) this.masteryImpact(bolt, "#a9e4ff", Math.atan2(bolt.vy, bolt.vx));
         if (bolt.pierces && !enemy.def.bossName) {
           bolt.pierces--;
           bolt.targets.push(enemy);
@@ -733,8 +767,33 @@ class Survival {
         break;
       }
     }
-    this.bolts = this.bolts.filter((bolt) => !bolt.spent && bolt.age < PLAYER_BOLT_LIFETIME &&
+    this.bolts = this.bolts.filter((bolt) => !bolt.spent && bolt.age < (bolt.moon ? 75 : PLAYER_BOLT_LIFETIME) &&
       bolt.x >= 0 && bolt.x <= WORLD.width && bolt.y >= 0 && bolt.y <= WORLD.height);
+  }
+
+  steerMoonBolt(bolt) {
+    const moon = bolt.moon;
+    moon.trail.push({ x: bolt.x, y: bolt.y });
+    if (moon.trail.length > 12) moon.trail.shift();
+
+    if (moon.target && (moon.target.hp <= 0 || (moon.target.opacity ?? 1) <= STEALTH_TARGET_ALPHA)) moon.target = null;
+    if (!moon.target && bolt.age % 9 === 0) {
+      const targets = this.moonTargets();
+      if (targets.length) moon.target = targets[Math.floor(this.random() * targets.length)];
+    }
+
+    const heading = Math.atan2(bolt.vy, bolt.vx);
+    const target = moon.target;
+    const goal = target ? Math.atan2(target.y - bolt.y, target.x - bolt.x) : heading + .08;
+    const difference = goal - heading;
+    const turn = bolt.age <= 4 ? .025 : Math.min(.23, .075 + bolt.age * .007);
+    const direction = heading + clamp(Math.atan2(Math.sin(difference), Math.cos(difference)), -turn, turn);
+    bolt.vx = Math.cos(direction);
+    bolt.vy = Math.sin(direction);
+  }
+
+  masteryImpact({ x, y }, color, angle) {
+    this.effects.push({ kind: "mastery-impact", x, y: y - 3, color, angle, tick: this.ticks, life: 17 });
   }
 
   moveBoss(enemy, dx, dy, distance) {
@@ -962,6 +1021,7 @@ class Survival {
           this.blades.some((blade) => distanceSquared(blade, enemy) < (enemy.def.radius + 14 * this.bladeSize) ** 2)) {
         enemy.bladeHit = this.ticks;
         this.hit(enemy, orbit.damage);
+        if (this.masteryActive("orbit")) this.masteryImpact(enemy, "#e9aaff", this.bladeAngle + Math.PI / 2);
         if (this.ticks < this.counterUntil && !enemy.def.bossName && enemy.hp > 0) {
           const pushX = enemy.x - p.x;
           const pushY = enemy.y - p.y;

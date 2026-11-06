@@ -12,8 +12,15 @@ const BATTLE_SOUNDS = {
   fuse: { type: "triangle", from: 995, to: 1500, duration: .18, volume: .045, noise: .05, gap: .42 },
   blast: { type: "triangle", from: 100, to: 29, duration: .2, volume: .17, noise: .15, gap: .18 },
   bossDown: { type: "triangle", from: 92, to: 34, duration: .58, volume: .25, noise: .15, gap: .3 },
-  mastery: { type: "triangle", from: 260, to: 640, duration: .24, volume: .15, noise: .03, gap: .08 },
-  heal: { type: "sine", from: 440, to: 660, duration: .36, volume: .17, gap: .08 },
+  "mastery-auto": { type: "triangle", from: 210, to: 670, duration: .29, volume: .16, noise: .025, gap: .1 },
+  "moon-stream": { type: "sine", from: 810, to: 375, duration: .14, volume: .11, noise: .024, gap: .13 },
+  "mastery-dash": { type: "triangle", from: 170, to: 370, duration: .23, volume: .13, gap: .1 },
+  "dash-sweep": { type: "sawtooth", from: 230, to: 75, duration: .19, volume: .11, noise: .07, gap: .14 },
+  "mastery-shield": { type: "triangle", from: 220, to: 480, duration: .38, volume: .14, gap: .12 },
+  "shield-shatter": { type: "triangle", from: 138, to: 31, duration: .45, volume: .25, noise: .2, gap: .18 },
+  "mastery-orbit": { type: "sawtooth", from: 124, to: 391, duration: .38, volume: .105, noise: .07, gap: .12 },
+  "mastery-vitality": { type: "triangle", from: 330, to: 523, duration: .43, volume: .15, gap: .1 },
+  "mastery-regen": { type: "sine", from: 440, to: 785, duration: .45, volume: .16, gap: .1 },
 };
 
 class BattleAudio {
