@@ -16,7 +16,7 @@
 </head>
 <body>
   <main id="game" aria-label="MIDNIGHT SURVIVORS">
-    <canvas id="field" aria-label="묘지 전투 화면. WASD로 이동하고 마우스 왼쪽 버튼을 누른 채 연사합니다."></canvas>
+    <canvas id="field" aria-label="묘지 전투 화면. WASD 또는 왼쪽 아래 터치로 이동하고, 마우스나 오른쪽 화면을 누른 채 사격합니다."></canvas>
     <header class="hud">
       <div id="time-track" class="time-track" role="progressbar" aria-label="남은 시간" aria-valuemin="0" aria-valuemax="1200" aria-valuenow="1200"><div id="time-fill"></div></div>
       <div class="hud-row">
@@ -44,6 +44,14 @@
       <div id="boss-deadline" class="boss-deadline" hidden></div>
       <div id="announcement" class="announcement" aria-live="polite"></div>
     </div>
+    <div id="touch-controls" class="touch-controls" hidden>
+      <div id="touch-stick" class="touch-stick" aria-hidden="true"><span id="touch-thumb"></span><small>이동</small></div>
+      <div class="touch-actions">
+        <div class="touch-aim-hint" aria-hidden="true">오른쪽 길게 눌러 사격</div>
+        <div id="touch-masteries" class="touch-masteries" role="group" aria-label="5단계 스킬"></div>
+        <div id="touch-abilities" class="touch-abilities" role="group" aria-label="기본 스킬"></div>
+      </div>
+    </div>
     <footer class="game-footer">
       <span><span class="live-dot"></span> 폐허가 된 묘지</span>
       <span class="desktop-hint"><kbd>W A S D</kbd> 이동 <span class="hint-divider">/</span> <kbd>좌클릭 유지</kbd> 연사<span id="ability-keys"></span></span>
@@ -65,7 +73,10 @@
         <button id="primary" type="button">플레이 <span aria-hidden="true">→</span></button>
         <button id="practice-start" class="panel-secondary" type="button">스킬 테스트 <small>모든 증강 5단계</small></button>
         <button id="practice-exit" class="panel-secondary" type="button" hidden>시작 화면으로</button>
-        <p id="panel-hint" class="panel-hint"><kbd>WASD</kbd> 이동<span>·</span><kbd>좌클릭 유지</kbd> 연사</p>
+        <div id="panel-hint">
+          <p class="panel-hint desktop-instructions"><kbd>WASD</kbd> 이동<span>·</span><kbd>좌클릭 유지</kbd> 연사</p>
+          <p class="panel-hint touch-instructions">왼쪽 아래를 끌어 이동<span>·</span>오른쪽을 누른 채 조준·사격</p>
+        </div>
       </section>
     </div>
     <div id="draft-overlay" class="draft-overlay" role="dialog" aria-modal="true" aria-labelledby="draft-title" aria-describedby="draft-copy" hidden>

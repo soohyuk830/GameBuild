@@ -13,7 +13,7 @@ button { font: inherit; cursor: pointer; }
 button:focus-visible { outline: 2px solid var(--parchment); outline-offset: 4px; }
 #game { position: relative; isolation: isolate; width: 100%; height: 100%; height: 100dvh; overflow: hidden; }
 #field { display: block; width: 100%; height: 100%; }
-#field.playing { cursor: crosshair; }
+#field.playing { cursor: crosshair; touch-action: none; user-select: none; -webkit-touch-callout: none; }
 .hud { position: absolute; inset: 0 0 auto; z-index: 1; pointer-events: none; }
 .time-track {
   height: 11px; margin: 13px 17px 0; padding: 2px;
@@ -89,6 +89,55 @@ kbd { display: inline-block; padding: 3px 5px; border: 1px solid #77654c; border
 .pause-button span { width: 3px; height: 11px; background: currentColor; border-radius: 1px; }
 .pause-button:disabled { visibility: hidden; }
 .pause-button:hover { background: #383333; }
+.touch-controls { position: absolute; inset: 0; z-index: 1; pointer-events: none; }
+.touch-stick {
+  position: absolute; left: max(64px, calc(env(safe-area-inset-left) + 58px));
+  bottom: max(66px, calc(env(safe-area-inset-bottom) + 60px));
+  width: 96px; height: 96px; transform: translateX(-50%);
+  border: 1px solid #c6b4dc89; border-radius: 50%; background: #1410206b;
+  box-shadow: inset 0 0 0 7px #ceb6ee15;
+}
+.touch-stick.dragging { bottom: auto; transform: translate(-50%, -50%); }
+.touch-stick span {
+  position: absolute; top: 50%; left: 50%; width: 33px; height: 33px;
+  transform: translate(-50%, -50%); border: 1px solid #e3d6f3bd; border-radius: 50%; background: #9b82b580;
+}
+.touch-stick small {
+  position: absolute; inset: auto 0 9px; color: #f0e5f8; font-size: 10px; text-align: center;
+}
+.touch-stick.dragging small { visibility: hidden; }
+.touch-actions {
+  --touch-button: clamp(44px, 12vw, 52px);
+  position: absolute; right: max(12px, calc(env(safe-area-inset-right) + 10px));
+  bottom: max(68px, calc(env(safe-area-inset-bottom) + 63px));
+  display: grid; justify-items: end; gap: 6px;
+}
+.touch-masteries, .touch-abilities { display: grid; grid-template-columns: repeat(3, var(--touch-button)); justify-content: end; gap: 6px; }
+.touch-abilities { grid-template-columns: repeat(2, var(--touch-button)); }
+.touch-masteries:empty, .touch-abilities:empty { display: none; }
+.touch-aim-hint {
+  padding: 3px 6px; background: #12111bd0; color: #eee2f5;
+  border-radius: 3px; font-size: 10px; text-shadow: 0 1px 3px #080511;
+}
+.touch-action {
+  position: relative; display: grid; place-items: center; width: var(--touch-button); height: var(--touch-button);
+  border: 1px solid currentColor; border-radius: 8px; background: #15141be8;
+  color: var(--augment-color); pointer-events: auto; touch-action: manipulation;
+}
+.touch-action svg { width: 23px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.touch-action small { position: absolute; bottom: 2px; color: #f0e5f8; font-size: 8px; font-weight: 800; }
+.touch-action > span { position: absolute; inset: 0; display: grid; place-items: center; background: #13101ce5; color: #fff4de; border-radius: inherit; font-size: 13px; font-weight: 800; }
+.touch-action.mastery-active { box-shadow: 0 0 10px currentColor; }
+.touch-action[aria-disabled="true"] { cursor: default; }
+.touch-instructions { display: none; }
+.touch-mode .desktop-instructions, .touch-mode .desktop-hint { display: none; }
+.touch-mode .touch-instructions { display: block; }
+.touch-mode .game-footer {
+  padding-left: max(11px, calc(env(safe-area-inset-left) + 8px));
+  padding-right: max(11px, calc(env(safe-area-inset-right) + 8px));
+}
+.touch-mode .footer-actions { grid-column: 3; }
+.touch-mode .pause-button { width: 44px; height: 44px; touch-action: manipulation; }
 .overlay {
   position: absolute; inset: 0; z-index: 2; display: grid; place-items: center; padding: 12px;
   background: radial-gradient(ellipse at center, #080a0e26 15%, #080a10a0 100%);
@@ -241,4 +290,7 @@ kbd { display: inline-block; padding: 3px 5px; border: 1px solid #77654c; border
   .panel h1 { font-size: 30px; margin: 4px 0; }
   .panel p { font-size: 12px; }
   #primary { margin: 8px 0 6px; min-height: 36px; padding-block: 5px; }
+}
+@media (orientation: landscape) and (max-height: 440px) {
+  .touch-masteries { grid-template-columns: repeat(6, var(--touch-button)); }
 }
