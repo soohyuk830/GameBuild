@@ -1,9 +1,9 @@
 "use strict";
 
 const ui = Object.fromEntries(
-  ["field", "time-track", "time-fill", "time", "wave", "hp-value", "hp-fill", "kills", "augment-progress", "enemy-strength", "announcement", "boss-hud", "boss-deadline", "pause",
+  ["field", "time-track", "time-fill", "time", "clock-label", "wave", "hp-value", "hp-fill", "kills", "augment-progress", "enemy-strength", "announcement", "boss-hud", "boss-deadline", "pause",
     "augments", "combo-status", "ability-keys", "sound-toggle", "overlay", "panel-title", "panel-tag", "panel-copy", "panel-stats", "panel-detail", "panel-hint", "primary",
-    "draft-overlay", "draft-stage", "draft-options"]
+    "draft-overlay", "draft-stage", "draft-options", "practice-start", "practice-reset", "practice-exit"]
     .map((id) => [id, document.getElementById(id)]),
 );
 const ctx = ui.field.getContext("2d", { alpha: false });
@@ -30,7 +30,7 @@ let mode = "ready";
 let lastFrame;
 let accumulator = 0;
 let lastHudKey = "";
-let lastWave = 1;
+let lastWave = "1";
 let lastNotice;
 let shotPointer = null;
 
@@ -153,15 +153,19 @@ function refreshBossHud(run) {
 }
 
 function refreshHud(run) {
-  const left = Math.ceil(run.remaining);
-  ui["time-fill"].style.transform = `scaleX(${run.remaining / RUN_SECONDS})`;
+  const left = run.practice ? RUN_SECONDS : Math.ceil(run.remaining);
+  ui["time-track"].hidden = run.practice;
+  ui["practice-reset"].hidden = !run.practice || mode !== "playing";
+  ui["time-fill"].style.transform = `scaleX(${run.practice ? 1 : run.remaining / RUN_SECONDS})`;
   const p = run.player;
   const hp = Math.ceil(p.hp);
-  const key = [left, hp, p.maxHp, run.kills, run.wave, run.nextAugmentKills, run.enemyMultiplier].join("/");
+  const key = [run.practice, left, hp, p.maxHp, run.kills, run.wave, run.nextAugmentKills, run.enemyMultiplier].join("/");
   ui["hp-fill"].style.transform = `scaleX(${p.hp / p.maxHp})`;
   if (key !== lastHudKey) {
     lastHudKey = key;
-    ui.time.textContent = timeText(left);
+    ui.announcement.hidden = run.practice;
+    ui["clock-label"].textContent = run.practice ? "스킬 테스트" : "새벽까지";
+    ui.time.textContent = run.practice ? "∞" : timeText(left);
     ui["time-track"].setAttribute("aria-valuenow", left);
     ui["time-track"].setAttribute("aria-valuetext", timeText(left));
     ui["hp-value"].textContent = `${hp} / ${p.maxHp}`;
@@ -170,9 +174,10 @@ function refreshHud(run) {
     ui["augment-progress"].hidden = run.draftIndex === 0;
     ui["augment-progress"].textContent = Number.isFinite(toNextAugment) ? `다음 증강 · ${toNextAugment}마리` : "증강 완료";
     ui["enemy-strength"].hidden = run.enemyMultiplier === 1;
-    if (run.wave !== lastWave) {
-      lastWave = run.wave;
-      ui.wave.innerHTML = `WAVE ${String(run.wave).padStart(2, "0")} <i></i> 20`;
+    const waveLabel = run.practice ? "practice" : String(run.wave);
+    if (waveLabel !== lastWave) {
+      lastWave = waveLabel;
+      ui.wave.innerHTML = run.practice ? "1–6 스킬 <i></i> R 초기화" : `WAVE ${String(run.wave).padStart(2, "0")} <i></i> 20`;
     }
   }
   for (const [id, badge] of cooldownBadges) {
@@ -192,7 +197,7 @@ function refreshHud(run) {
     ui.announcement.textContent = run.notice.text;
     ui.announcement.classList.toggle("boss-notice", Boolean(run.notice.boss));
   }
-  ui.announcement.classList.toggle("visible", mode === "playing" && run.ticks - run.notice.tick < 155);
+  ui.announcement.classList.toggle("visible", !run.practice && mode === "playing" && run.ticks - run.notice.tick < 155);
   refreshBossHud(run);
 }
 
@@ -217,6 +222,8 @@ function play() {
   ui.field.classList.add("playing");
   ui.pause.disabled = false;
   ui.primary.blur();
+  ui["practice-start"].blur();
+  ui["practice-reset"].blur();
   refreshHud(session);
 }
 
@@ -270,9 +277,14 @@ function showDraft() {
 }
 
 const SCREENS = {
+  ready: { title: document.title, button: "플레이" },
   paused: { tag: "PAUSED", title: "일시정지", copy: "생존을 이어갈 준비가 되셨나요?", button: "계속하기" },
   win: { tag: "SURVIVED", title: "새벽이 밝았습니다", copy: "20분 동안 살아남았습니다.", button: "다시 시작" },
   loss: { tag: "RUN ENDED", title: "망자에게 포위됐습니다", copy: "묘지의 밤이 다시 시작됩니다.", button: "다시 도전" },
+};
+const readyCopy = ui["panel-copy"].innerHTML;
+const PRACTICE_PAUSE = {
+  tag: "PRACTICE", title: "스킬 테스트", copy: "숫자 1–6으로 스킬을 사용하세요. R을 누르면 표적, 체력, 재사용 대기시간이 초기화됩니다.", button: "계속하기",
 };
 const COMPLETE_CLEAR = { tag: "ALL BOSSES DEFEATED", title: "완전 토벌", copy: "세 보스를 모두 처치하고 새벽까지 살아남았습니다.", button: "다시 시작" };
 const RECORD_KEY = "midnight-survivors-record-v1";
@@ -323,24 +335,46 @@ function renderRunSummary(complete) {
 function showScreen(screen) {
   const complete = screen === "win" && Object.values(BOSS_MINUTES)
     .every((kind) => session.defeatedBosses.includes(FOES[kind].bossName));
-  const content = complete ? COMPLETE_CLEAR : SCREENS[screen];
+  const practicePause = screen === "paused" && session?.practice;
+  const content = practicePause ? PRACTICE_PAUSE : complete ? COMPLETE_CLEAR : SCREENS[screen];
   mode = screen;
   clearInput();
   ui.field.classList.remove("playing");
-  refreshHud(session);
+  refreshHud(session || menuScene);
   ui.overlay.dataset.screen = screen;
   ui.overlay.hidden = false;
   ui.pause.disabled = true;
-  ui["panel-tag"].textContent = content.tag;
+  ui["panel-tag"].hidden = !content.tag;
+  ui["panel-tag"].textContent = content.tag ?? "";
+  ui["panel-title"].lang = screen === "ready" ? "en" : "ko";
   ui["panel-title"].textContent = content.title;
-  ui["panel-copy"].textContent = content.copy;
-  ui["panel-stats"].hidden = screen === "paused";
-  ui["panel-detail"].hidden = screen === "paused";
-  if (screen !== "paused") renderRunSummary(complete);
-  ui["panel-hint"].hidden = true;
+  if (screen === "ready") ui["panel-copy"].innerHTML = readyCopy;
+  else ui["panel-copy"].textContent = content.copy;
+  const showSummary = (screen === "win" || screen === "loss") && !session.practice;
+  ui["panel-stats"].hidden = !showSummary;
+  ui["panel-detail"].hidden = !showSummary;
+  if (showSummary) renderRunSummary(complete);
+  ui["panel-hint"].hidden = screen !== "ready";
+  ui["practice-start"].hidden = screen !== "ready";
+  ui["practice-exit"].hidden = !practicePause;
   ui.primary.firstChild.textContent = `${content.button} `;
   ui.primary.focus({ preventScroll: true });
 }
+
+function startPractice() {
+  battleAudio.unlock();
+  session = new Survival(Math.random, (cue) => battleAudio.play(cue), { practice: true });
+  refreshAugments();
+  play();
+}
+
+ui["practice-start"].addEventListener("click", startPractice);
+ui["practice-reset"].addEventListener("click", startPractice);
+ui["practice-exit"].addEventListener("click", () => {
+  session = null;
+  refreshAugments();
+  showScreen("ready");
+});
 
 ui.primary.addEventListener("click", () => {
   battleAudio.unlock();
@@ -371,6 +405,11 @@ function movement() {
 
 window.addEventListener("keydown", (event) => {
   if (mode !== "playing") return;
+  if (session.practice && event.code === "KeyR") {
+    event.preventDefault();
+    if (!event.repeat) startPractice();
+    return;
+  }
   if (movementKeys.has(event.code)) {
     event.preventDefault();
     keys.add(event.code);

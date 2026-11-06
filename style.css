@@ -107,6 +107,7 @@ kbd { display: inline-block; padding: 3px 5px; border: 1px solid #77654c; border
 .panel-tag { display: flex; align-items: center; justify-content: center; gap: 9px; color: #ddbf90; font-size: 10px; font-weight: 800; letter-spacing: .2em; }
 .panel-tag i { width: 18px; height: 1px; background: var(--brass); }
 .panel h1 { margin: 8px 0 11px; color: #fff0d3; font-family: Batang, "AppleMyungjo", serif; font-size: clamp(30px, 6vw, 53px); letter-spacing: -.06em; line-height: 1.18; text-shadow: 0 0 26px #c1975c60; }
+.overlay[data-screen="ready"] .panel h1 { letter-spacing: .015em; text-wrap: balance; }
 .panel p { margin: 0; color: #ded1bf; font-size: 14px; line-height: 1.65; word-break: keep-all; }
 .panel p b { color: #f3d49c; }
 #primary {
@@ -117,6 +118,14 @@ kbd { display: inline-block; padding: 3px 5px; border: 1px solid #77654c; border
 }
 #primary:hover { background: linear-gradient(#6a5671, #403146); }
 #primary span { position: absolute; right: 14px; }
+.panel-secondary {
+  display: flex; align-items: center; justify-content: center; gap: 9px;
+  width: min(230px, 100%); min-height: 36px; margin: 0 auto 14px; padding: 7px 10px;
+  color: #ebd2ff; background: #191827; border: 1px solid #937ba8; border-radius: 2px; font-size: 12px; font-weight: 800;
+}
+.panel-secondary:hover { background: #332643; }
+.panel-secondary small { color: #c5add5; font-size: 10px; font-weight: 600; }
+.practice-reset { font-size: 21px; }
 .panel .panel-hint { color: #c4b5a5; font-size: 11px; }
 .panel-hint span { padding: 0 6px; }
 .panel-stats { display: flex; justify-content: center; flex-wrap: wrap; gap: 5px 13px; margin-top: 13px; color: #d1bbe1; font-size: 12px; }

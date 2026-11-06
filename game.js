@@ -283,9 +283,10 @@ function crowdPushWeight(enemy) {
 }
 
 class Survival {
-  constructor(random = Math.random, playSound = null) {
+  constructor(random = Math.random, playSound = null, { practice = false } = {}) {
     this.random = random;
     this.playSound = playSound;
+    this.practice = practice;
     this.ticks = 0;
     this.wave = 1;
     this.kills = 0;
@@ -324,12 +325,33 @@ class Survival {
     this.effects = [];
     this.blades = [];
     this.spawnAt = 18;
-    for (let i = 0; i < 20; i++) this.spawn(i % 3 === 0 ? "bat" : "zombie", 275 + this.random() * 180);
+    if (practice) this.setupPractice();
+    else for (let i = 0; i < 20; i++) this.spawn(i % 3 === 0 ? "bat" : "zombie", 275 + this.random() * 180);
+  }
+
+  setupPractice() {
+    this.nextAugmentKills = Infinity;
+    this.spawnAt = Infinity;
+    for (const id of Object.keys(AUGMENTS)) this.augments.set(id, MASTERY_RANK);
+    this.blades = Array.from({ length: this.stats("orbit").count }, () => ({}));
+    this.updateBlades();
+    this.player.maxHp = this.stats("vitality").maxHp;
+    this.player.hp = Math.round(this.player.maxHp * .25);
+
+    const targets = ["skeleton", "zombie", "sentinel", "brute", "bonebow"];
+    const distances = [145, 208, 325];
+    for (let i = 0; i < 15; i++) {
+      const tier = i % distances.length;
+      const target = this.spawn(targets[i % targets.length], distances[tier], i * TAU / 15);
+      target.maxHp = 180 + tier * 40;
+      target.hp = target.maxHp;
+    }
   }
 
   get seconds() { return this.ticks / TICKS_PER_SECOND; }
   get remaining() { return RUN_SECONDS - this.seconds; }
   get manualCooldownTicks() {
+    if (this.practice) return TICKS_PER_SECOND;
     const remainingFraction = this.remaining / RUN_SECONDS;
     return Math.round(MANUAL_MIN_COOLDOWN_TICKS + (TICKS_PER_SECOND - MANUAL_MIN_COOLDOWN_TICKS) * remainingFraction ** 3);
   }
@@ -446,12 +468,12 @@ class Survival {
     if (this.result || this.choosingAugment) return;
 
     this.ticks++;
-    if (this.ticks >= RUN_SECONDS * TICKS_PER_SECOND) {
+    if (!this.practice && this.ticks >= RUN_SECONDS * TICKS_PER_SECOND) {
       this.result = "win";
       return;
     }
 
-    const wave = 1 + Math.floor(this.ticks / (WAVE_SECONDS * TICKS_PER_SECOND));
+    const wave = this.practice ? this.wave : 1 + Math.floor(this.ticks / (WAVE_SECONDS * TICKS_PER_SECOND));
     if (wave !== this.wave) {
       this.wave = wave;
       const boss = BOSS_MINUTES[wave - 1];
@@ -468,7 +490,7 @@ class Survival {
       this.notice = { text: `${label}  ·  ${overdue ? "보스 중첩" : names}`, tick: this.ticks, boss: Boolean(boss) };
     }
     if (this.choosingAugment) return;
-    this.updateAssault();
+    if (!this.practice) this.updateAssault();
 
     const player = this.player;
     const input = Math.hypot(dx, dy);
@@ -984,7 +1006,7 @@ class Survival {
         if (distance >= enemy.def.hideRadius) enemy.revealed = false;
         enemy.opacity = clamp(enemy.opacity + (enemy.revealed ? .16 : -.035), 0, 1);
       }
-      const usingSkill = enemy.def.bossName ? this.moveBoss(enemy, dx, dy, distance) : this.moveFoeSkill(enemy, dx, dy, distance);
+      const usingSkill = this.practice || (enemy.def.bossName ? this.moveBoss(enemy, dx, dy, distance) : this.moveFoeSkill(enemy, dx, dy, distance));
       if (enemy.hp <= 0) continue;
       if (!usingSkill) {
         if (enemy.def.armor) {
@@ -1030,7 +1052,7 @@ class Survival {
           enemy.y = clamp(enemy.y + pushY * push, 20, WORLD.height - 20);
         }
       }
-      if (enemy.hp > 0 && distanceSquared(p, enemy) < (p.radius + enemy.def.radius) ** 2) {
+      if (!this.practice && enemy.hp > 0 && distanceSquared(p, enemy) < (p.radius + enemy.def.radius) ** 2) {
         const charging = enemy.attack?.pattern === "charge" && this.ticks >= enemy.attack.fireAt;
         if (charging) enemy.attack.connected = true;
         if (!dashing) {
